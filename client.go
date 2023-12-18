@@ -147,6 +147,41 @@ func (c *Client) sendRequestRaw(req *http.Request) (body io.ReadCloser, err erro
 	return resp.Body, nil
 }
 
+func (c *Client) sendRequestText(req *http.Request, v Response) (string, error) {
+	req.Header.Set("Accept", "application/json; charset=utf-8")
+
+	// Check whether Content-Type is already set, Upload Files API requires
+	// Content-Type == multipart/form-data
+	contentType := req.Header.Get("Content-Type")
+	if contentType == "" {
+		req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	}
+
+	res, err := c.config.HTTPClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	defer res.Body.Close()
+
+	if isFailureStatusCode(res) {
+		return "", c.handleErrorResp(res)
+	}
+
+	if v != nil {
+		v.SetHeader(res.Header)
+	}
+
+	if v == nil {
+		return "", nil
+	}
+
+	result := ""
+	err = decodeString(res.Body, &result)
+
+	return result, err
+}
+
 func sendRequestStream[T streamable](client *Client, req *http.Request) (*streamReader[T], error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
